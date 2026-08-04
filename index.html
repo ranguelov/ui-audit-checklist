@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ui-audit-pro — живая проверка сессии</title>
+<style>
+:root{
+  --bg:#0e1116; --panel:#151a21; --panel2:#1b222b; --line:#232c37; --line2:#2f3a48;
+  --text:#e6edf3; --text2:#a8b3c1; --faint:#6e7b8b;
+  --accent:#3b82f6; --ok:#22c55e; --bad:#ef4444; --skip:#f59e0b;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+a{color:var(--accent)}
+.wrap{max-width:960px;margin:0 auto;padding:20px 16px 140px}
+header{border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:18px}
+h1{font-size:20px;margin:0 0 4px}
+.sub{color:var(--text2);font-size:13px}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.meta label{display:flex;flex-direction:column;gap:3px;font-size:10px;color:var(--faint);
+  text-transform:uppercase;letter-spacing:.06em}
+.meta input{background:var(--panel);border:1px solid var(--line);border-radius:6px;
+  color:var(--text);padding:5px 8px;font:12px var(--mono);min-width:150px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0 6px}
+button{font-family:inherit;cursor:pointer;border-radius:7px;font-size:12px;padding:6px 11px;
+  border:1px solid var(--line2);background:var(--panel2);color:var(--text)}
+button:hover{border-color:var(--faint)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:500}
+button.ghost{background:transparent}
+.group{margin:22px 0 0}
+.group h2{font-size:14px;margin:0 0 2px;display:flex;align-items:center;gap:8px}
+.group .why{color:var(--faint);font-size:12px;margin:0 0 10px}
+.gcount{font-size:10px;color:var(--faint);font-weight:400;font-family:var(--mono)}
+.item{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:12px 14px;margin-bottom:10px}
+.item.ok{border-left:3px solid var(--ok)}
+.item.bad{border-left:3px solid var(--bad)}
+.item.skip{border-left:3px solid var(--skip)}
+.itop{display:flex;gap:10px;align-items:flex-start}
+.num{font:11px var(--mono);color:var(--faint);padding-top:2px;min-width:34px}
+.ttl{font-weight:500;font-size:14px;flex:1}
+.how{margin:9px 0 0;padding-left:20px;color:var(--text2);font-size:13px}
+.how li{margin:3px 0}
+.expect{margin-top:9px;padding:8px 10px;background:var(--panel2);border-radius:7px;
+  font-size:12.5px;color:var(--text2)}
+.expect b{color:var(--text);font-weight:500}
+kbd{font:11px var(--mono);background:var(--panel2);border:1px solid var(--line2);
+  border-radius:4px;padding:1px 5px}
+code{font:12px var(--mono);background:var(--panel2);padding:1px 5px;border-radius:4px}
+.status{display:flex;gap:6px;margin-top:11px;flex-wrap:wrap}
+.status button{font-size:11.5px}
+.status button[aria-pressed="true"][data-v="ok"]{background:var(--ok);border-color:var(--ok);color:#04180b;font-weight:600}
+.status button[aria-pressed="true"][data-v="bad"]{background:var(--bad);border-color:var(--bad);color:#fff;font-weight:600}
+.status button[aria-pressed="true"][data-v="skip"]{background:var(--skip);border-color:var(--skip);color:#231502;font-weight:600}
+.fields{margin-top:10px;display:none;flex-direction:column;gap:8px}
+.fields.on{display:flex}
+.fields label{font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em}
+textarea{width:100%;background:var(--panel2);border:1px solid var(--line2);border-radius:7px;
+  color:var(--text);padding:8px 10px;font:12px var(--mono);resize:vertical}
+.hint{font-size:11px;color:var(--faint);margin-top:3px}
+footer{position:fixed;left:0;right:0;bottom:0;background:rgba(14,17,22,.96);
+  border-top:1px solid var(--line2);backdrop-filter:blur(8px);z-index:50}
+.fin{max-width:960px;margin:0 auto;padding:10px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.prog{flex:1;min-width:180px}
+.track{height:6px;background:var(--panel2);border-radius:6px;overflow:hidden;display:flex}
+.track i{display:block;height:100%}
+.pill{font:11px var(--mono);color:var(--text2)}
+dialog{background:var(--panel);color:var(--text);border:1px solid var(--line2);
+  border-radius:12px;max-width:780px;width:calc(100vw - 40px);padding:0}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+.dh{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+.dh b{flex:1;font-size:14px}
+.db{padding:14px 16px;max-height:60vh;overflow:auto}
+.df{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap}
+pre{margin:0;font:11.5px/1.5 var(--mono);white-space:pre-wrap;word-break:break-word;
+  background:var(--panel2);padding:12px;border-radius:8px}
+.hist{display:flex;flex-direction:column;gap:6px}
+.hrow{display:flex;gap:10px;align-items:center;background:var(--panel2);border-radius:8px;
+  padding:8px 10px;font-size:12px}
+.hrow .hd{font:11px var(--mono);color:var(--text2);flex:1}
+.tag{font:10px var(--mono);padding:2px 6px;border-radius:5px;border:1px solid var(--line2)}
+.tag.ok{color:var(--ok);border-color:var(--ok)}
+.tag.bad{color:var(--bad);border-color:var(--bad)}
+.tag.skip{color:var(--skip);border-color:var(--skip)}
+.note{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:18px}
+.saved{color:var(--ok);font-size:11px}
+@media(max-width:640px){.num{min-width:26px}.wrap{padding-bottom:170px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Живая проверка сессии — ui-audit-pro</h1>
+  <div class="sub">
+    Что и <b>как</b> проверить руками в открытом приложении. Отметь каждый пункт,
+    в сломанных впиши что не так и вставь строку из <b>Log</b> в правом нижнем углу приложения.
+    В конце — «Сохранить и отправить».
+  </div>
+  <div class="meta">
+    <label>Сессия<input id="m-date" type="text" placeholder="2026-08-04"></label>
+    <label>Ветка<input id="m-branch" type="text" placeholder="feature/…"></label>
+    <label>Коммит<input id="m-commit" type="text" placeholder="f17e68e"></label>
+    <label>Сборка / пакет<input id="m-build" type="text" placeholder="package.id 0.0.0"></label>
+  </div>
+  <div class="bar">
+    <button class="ghost" id="b-hist">История проверок</button>
+    <button class="ghost" id="b-only-open">Показать только неотмеченные</button>
+    <button class="ghost" id="b-only-bad">Только сломанные</button>
+    <button class="ghost" id="b-reset">Начать заново</button>
+    <span class="saved" id="saved"></span>
+  </div>
+</header>
+
+<div id="list"></div>
+
+<div class="note">
+  <label style="font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em">
+    Общее впечатление и всё, что не влезло в пункты
+  </label>
+  <textarea id="overall" rows="3" placeholder="Что показалось странным, медленным, непонятным по формулировкам в интерфейсе…"></textarea>
+  <label style="font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin-top:10px;display:block">
+    Что добавить или изменить в этом чек-листе к следующему разу
+  </label>
+  <textarea id="requests" rows="2" placeholder="Например: добавить проверку выгрузки снимков; убрать пункт 12 — он про то же, что 11"></textarea>
+  <div class="hint">Это попадёт в отчёт, и я перепишу список к следующей сессии.</div>
+</div>
+
+</div>
+
+<footer>
+  <div class="fin">
+    <div class="prog">
+      <div class="track" id="track"></div>
+      <div class="pill" id="pill">—</div>
+    </div>
+    <button class="primary" id="b-send">Сохранить и отправить</button>
+  </div>
+</footer>
+
+<dialog id="dlg">
+  <div class="dh"><b id="dlg-t">Отчёт</b>
+    <button class="ghost" onclick="document.getElementById('dlg').close()">✕</button></div>
+  <div class="db" id="dlg-b"></div>
+  <div class="df" id="dlg-f"></div>
+</dialog>
+
+<script>
+/* ────────────────────────────────────────────────────────────────────────────
+   ЧЕК-ЛИСТ. Версия в CHECKLIST важна: по ней я понимаю, какой список ты гонял,
+   и не сравниваю результаты разных списков между собой.
+
+   Формулировки — простым языком и от действия: «нажми», «посмотри», а не
+   «валидировать состояние узла». Пункт, который надо расшифровывать, не проверяют.
+   ──────────────────────────────────────────────────────────────────────────── */
+const CHECKLIST = {
+  version: '2026-08-05 · R1b шаг 1 + R1a · без данных клиента',
+  commit: 'после cf6db61',
+  groups: [
+    {
+      id: 'start',
+      title: 'Запуск: приложение вообще открылось',
+      why: 'Схема выросла до v11, правился главный процесс и preload. Если тут не так, дальше идти незачем.',
+      items: [
+        {
+          id: 'start-app',
+          t: 'Приложение запускается без ошибок в терминале',
+          how: [
+            'В терминале: <code>npm run dev</code> — полный перезапуск, не горячая перезагрузка.',
+            'Дождись окна.',
+            'Прочитай терминал: должны быть строки про схему <b>v11</b> и <b>All handlers registered</b>.'
+          ],
+          exp: 'Окно открылось, все вкладки на месте. В терминале нет <b>Error</b> и нет <b>«не применилась»</b>. Схема либо «v10 → v11», либо «актуальна: v11» — второе значит, что миграция прошла раньше.'
+        },
+        {
+          id: 'start-log',
+          t: 'В правом нижнем углу появилась кнопка Log',
+          how: [
+            'Посмотри в правый нижний угол окна.',
+            'Нажми — откроется окошко со строками.',
+            'Пощёлкай по вкладкам и посмотри, как строки добавляются.'
+          ],
+          exp: 'Кнопка есть, счётчик растёт. Строки вида <code>00:12:03.412 ok atlas:map 42ms {packageId}</code>. Упавший вызов — красная строка <b>FAIL</b>, и счётчик на кнопке краснеет.'
+        },
+        {
+          id: 'start-copy',
+          t: 'Из журнала копируется текст',
+          how: [
+            'Открой <kbd>Log</kbd>, включи <b>only errors</b> и снова выключи.',
+            'Нажми <kbd>Copy</kbd>.',
+            'Вставь куда-нибудь, чтобы убедиться.'
+          ],
+          exp: 'В буфере заголовок со счётчиками и строки под ним. На кнопке мелькает <b>Copied ✓</b>. Если включён фильтр — копируются только ошибки, то есть ровно то, что видно.'
+        },
+        {
+          id: 'start-data',
+          t: 'На карте есть с чем работать',
+          how: [
+            'Вкладка <b>Atlas</b> → выбери приложение в списке вверху.',
+            'Посмотри счётчики в шапке и найди узел с самым большим числом снимков.'
+          ],
+          exp: 'Есть хотя бы один узел, у которого <b>несколько снимков</b> — иначе разделять нечего, и половину списка ниже придётся пропустить. Если снимков мало, поработай обходом руками и вернись: это нормальный ход, а не провал проверки.'
+        }
+      ]
+    },
+    {
+      id: 'pick',
+      title: 'Выделение снимков в панели экрана',
+      why: 'Разделять можно только то, что удалось выделить. Обрезанное или неверное выделение означает «разделил не то».',
+      items: [
+        {
+          id: 'pick-open',
+          t: 'Снимки узла кликабельны',
+          how: [
+            'В <b>Atlas</b> нажми на узел, у которого несколько снимков.',
+            'Справа откроется панель — прокрути её до раздела <b>Shots</b>.',
+            'Нажми на любой снимок.'
+          ],
+          exp: 'У снимка появилась рамка и кружок в углу. Над лентой появилась полоса <b>«1 selected»</b> с кнопками.'
+        },
+        {
+          id: 'pick-range',
+          t: 'Диапазон через Shift',
+          how: [
+            'Нажми на первый снимок.',
+            'Зажми <kbd>Shift</kbd> и нажми на снимок через несколько штук.',
+            'Сверь счётчик с тем, что подсвечено.'
+          ],
+          exp: 'Выделились <b>все снимки между ними</b>, а не только два. Счётчик равен числу подсвеченных.'
+        },
+        {
+          id: 'pick-all',
+          t: 'Кнопка «show all N» показывает все снимки',
+          how: [
+            'Найди узел, где под лентой написано <code>showing 48 newest of N</code>.',
+            'Если такого нет — <b>пропусти</b>: у узлов меньше 48 снимков, и потолок не проявляется.',
+            'Нажми <b>show all N</b>.'
+          ],
+          exp: 'Лента дорисовалась до полного числа, строка «showing …» исчезла. Выделять можно любой снимок, а не только последние 48.'
+        },
+        {
+          id: 'pick-reset',
+          t: 'Переход на другой экран снимает выделение',
+          how: [
+            'Выдели пару снимков.',
+            'Нажми на другой узел карты.',
+            'Вернись назад.'
+          ],
+          exp: 'Полоса «N selected» исчезла, ничего не осталось выделенным «в памяти». Иначе разделение унесло бы снимки, которых уже не видно.'
+        }
+      ]
+    },
+    {
+      id: 'split',
+      title: 'Разделение: «это отдельный экран»',
+      why: 'Главное этой сессии. У части снимков подпись совпадает ЧЕСТНО — на приложении без id элементов платформа такие экраны не различает и различить не может. Отменять нечего: склейки не было. Разделить может только человек глазами.',
+      items: [
+        {
+          id: 'split-new',
+          t: 'Кнопка «Split into new screen» создаёт новый экран',
+          how: [
+            'Открой узел с несколькими снимками и посмотри на них глазами: найди те, что <b>не</b> тот же экран, что остальные.',
+            'Выдели их (клик, <kbd>Shift</kbd> для диапазона).',
+            'Запомни число экранов в шапке.',
+            'Нажми <b>Split into new screen</b>.'
+          ],
+          exp: 'Число экранов стало <b>на один больше</b>. Карта перерисовалась, и открылся <b>новый</b> узел ровно с теми снимками, что ты выделил.'
+        },
+        {
+          id: 'split-header',
+          t: 'В шапке появилось «+ 1 split by hand»',
+          how: [
+            'Посмотри строку счётчиков сверху (снимки · экраны · структуры).',
+            'Наведи мышь на «split by hand».'
+          ],
+          exp: 'Рядом стоит <b>+ 1 split by hand</b>. В подсказке — сколько снимков отделено и во сколько экранов, и что платформа эти экраны различить не могла.'
+        },
+        {
+          id: 'split-who',
+          t: 'Отделённый узел говорит, кто и когда его отделил',
+          how: [
+            'Открой отделённый узел.',
+            'Прокрути до <b>Shots</b> и прочитай строку над лентой.'
+          ],
+          exp: 'Строка <b>«split off by you · дата»</b> и ссылка <b>undo split</b> рядом.'
+        },
+        {
+          id: 'split-parent',
+          t: 'Исходный узел объясняет, куда делись снимки',
+          how: [
+            'Вернись на узел, из которого выделял.',
+            'Посмотри число снимков и строку над лентой.'
+          ],
+          exp: 'Снимков стало меньше — и рядом написано <b>«N shots of this screen were split off into separate screens»</b>. Пропажа объяснена на экране, а не догадкой.'
+        },
+        {
+          id: 'split-move',
+          t: '«Move to…» переносит снимки в существующий экран',
+          how: [
+            'Выдели один снимок в любом узле.',
+            'В полосе действий открой список <b>Move to…</b>.',
+            'Выбери другой экран.'
+          ],
+          exp: 'Снимок уехал: у выбранного экрана снимков на один больше, у прежнего на один меньше. Нового узла <b>не</b> появилось, общее число экранов не выросло.'
+        },
+        {
+          id: 'split-empty',
+          t: 'Без выделения разделить нечем',
+          how: [
+            'Нажми <b>Clear</b> в полосе действий.'
+          ],
+          exp: 'Полоса с кнопками исчезла целиком. Пустой узел создать невозможно — кнопок просто нет.'
+        }
+      ]
+    },
+    {
+      id: 'agree',
+      title: 'Два вида показывают ОДНО число',
+      why: 'Самое важное требование. Разойдись Build Audit и Atlas в числе экранов — верить перестанут обоим, и выбрать между ними будет нечем.',
+      items: [
+        {
+          id: 'agree-tabs',
+          t: 'Build Audit и Atlas согласны после разделения',
+          how: [
+            'Запомни число экранов в шапке <b>Atlas</b>.',
+            'Перейди в <b>Build Audit</b>, выбери ту же сборку.',
+            'Найди число экранов там.'
+          ],
+          exp: 'Числа <b>совпадают</b>. Если нет — впиши оба, это самый серьёзный дефект из возможных здесь.'
+        },
+        {
+          id: 'agree-apps',
+          t: 'Список приложений вверху Atlas показывает то же число',
+          how: [
+            'Открой список приложений в шапке Atlas.',
+            'Посмотри число экранов у своего приложения в списке.'
+          ],
+          exp: 'Совпадает с числом на самой карте.'
+        },
+        {
+          id: 'agree-selftest',
+          t: 'Отчёт самопроверки видит разделение',
+          how: [
+            'В терминале: <code>npm run map:selftest</code>',
+            'Открой отчёт, который он записал (путь печатает сам скрипт).',
+            'Найди строку «разложено руками» и колонку «руками» в таблице куч.'
+          ],
+          exp: 'Строка <b>«разложено руками: снимков N, узлов M»</b> с настоящими числами, и в таблице у нужной кучи в колонке «руками» стоит <code>N → M</code>. Число экранов в отчёте не спорит с приложением.'
+        }
+      ]
+    },
+    {
+      id: 'name',
+      title: 'Имена не отменяют разделение',
+      why: 'Прошлый живой дефект: человек разделял, потом называл экран — и имя уезжало на все снимки общей подписи, отменяя его же решение следующим действием.',
+      items: [
+        {
+          id: 'name-approve',
+          t: 'Название достаётся только снимкам своего экрана',
+          how: [
+            'Раздели узел, если ещё не разделён.',
+            'В <b>Build Audit</b> назови ОДИН снимок исходного узла.',
+            'Вернись в <b>Atlas</b>.'
+          ],
+          exp: 'Имя получили только снимки <b>исходного</b> узла. Отделённый остался безымянным, число экранов <b>не изменилось</b>.'
+        },
+        {
+          id: 'name-count',
+          t: 'Диалог именования обещает верное число снимков',
+          how: [
+            'В <b>Build Audit</b> начни называть снимок отделённого узла.',
+            'Посмотри, сколько снимков диалог обещает назвать этим именем.'
+          ],
+          exp: 'Обещанное число равно числу снимков <b>отделённого</b> узла, а не всей кучи с одинаковой подписью.'
+        }
+      ]
+    },
+    {
+      id: 'undo',
+      title: 'Отмена и живучесть решения',
+      why: 'Ошибка должна стоить одно нажатие, а верное решение — переживать удаление снимка и перезапуск.',
+      items: [
+        {
+          id: 'undo-split',
+          t: '«undo split» возвращает всё как было',
+          how: [
+            'Открой отделённый узел.',
+            'Нажми <b>undo split</b> над лентой снимков.'
+          ],
+          exp: 'Узел исчез, снимки вернулись в исходный, число экранов прежнее. Открылся исходный узел, а не пустая панель.'
+        },
+        {
+          id: 'undo-delete',
+          t: 'Удаление и восстановление снимка не теряет решение',
+          how: [
+            'Раздели узел.',
+            'В <b>Build Audit</b> удали один снимок отделённого узла.',
+            'Восстанови его из секции <b>Deleted</b>.',
+            'Вернись в Atlas.'
+          ],
+          exp: 'Восстановленный снимок вернулся <b>в отделённый узел</b>, а не в общую кучу. Разделять заново не пришлось.'
+        },
+        {
+          id: 'undo-restart',
+          t: 'Решение живо после перезапуска',
+          how: [
+            'Раздели узел.',
+            'Закрой приложение полностью и запусти снова.',
+            'Открой Atlas.'
+          ],
+          exp: 'Отделённый узел на месте, с той же подписью «split off by you» и той же датой.'
+        }
+      ]
+    },
+    {
+      id: 'r1a',
+      title: 'Прошлая сессия: то, что глазами ещё не смотрели',
+      why: 'В контексте проекта это помечено «глазами владельцем не подтверждено». Проверяем заодно, чтобы долг не тянулся.',
+      items: [
+        {
+          id: 'r1a-merges',
+          t: 'Кнопки «One screen / Two screens» работают',
+          how: [
+            'В шапке Atlas найди счётчик непросмотренных склеек и открой его. Либо открой узел с надписью <b>«N different structures folded into this screen»</b>.',
+            'Если ни того, ни другого нет — <b>пропусти</b>: платформа на этой карте ничего не склеивала.',
+            'Нажми <b>Two screens</b> на любой паре.'
+          ],
+          exp: 'Число экранов выросло, у пары появилась подпись <b>«you split them»</b> и ссылка <b>undo</b>. Две картинки в паре <b>разные</b> — не два одинаковых снимка.'
+        },
+        {
+          id: 'r1a-undo',
+          t: 'Решение по склейке обратимо',
+          how: [
+            'Нажми <b>undo</b> у той пары, где выбрал Two screens.'
+          ],
+          exp: 'Всё вернулось: число экранов прежнее, снова видны кнопки One screen / Two screens.'
+        },
+        {
+          id: 'r1a-header',
+          t: 'Шапка честно говорит «экранов меньше, чем структур»',
+          how: [
+            'Посмотри строку счётчиков в шапке Atlas.',
+            'Наведи мышь на «of N structures».'
+          ],
+          exp: 'Видно и снимки, и экраны, и структуры разом. В подсказке объяснено, что склейки надо просмотреть, потому что неверная склейка заставляет карту лгать.'
+        }
+      ]
+    },
+    {
+      id: 'regress',
+      title: 'Не должно было сломаться',
+      why: 'Правились оба читателя карты, главный процесс и preload. Проверяем то, что стояло рядом.',
+      items: [
+        {
+          id: 'reg-export',
+          t: 'Выгрузка снимков на диск работает',
+          how: [
+            'В Atlas нажми <b>Download all screenshots</b> и выбери папку.'
+          ],
+          exp: 'Строка «Saved N screenshots … to …», в папке картинки и опись <code>manifest.json</code>.'
+        },
+        {
+          id: 'reg-tabs',
+          t: 'Все вкладки открываются',
+          how: [
+            'Пройди по всем вкладкам подряд.',
+            'Посмотри счётчик ошибок на кнопке <kbd>Log</kbd>.'
+          ],
+          exp: 'Вкладки рисуются, счётчик <b>failed</b> остался нулём. Если нет — открой Log, включи <b>only errors</b>, скопируй и вставь ниже.'
+        },
+        {
+          id: 'reg-noauto',
+          t: 'Автопрохода в интерфейсе нет — и отказ внятный',
+          how: [
+            'В <b>Build Audit</b> начни обход сборки.',
+            'Поищи глазами кнопки «Исследовать за меня» и «дойти» — их быть <b>не должно</b>.',
+            'Если где-то осталась старая кнопка — нажми и прочитай ответ.'
+          ],
+          exp: 'Кнопок автопрохода нет: обход ручной, твои тапы в живом экране пишутся в карту. Это <b>решение</b>, а не пропажа — код жив за выключенным флагом. Если старая кнопка осталась, ответ должен быть словами <b>«Автоматический обход убран: платформа не ходит по приложению сама»</b>, а не тишина и не пустой экран.'
+        },
+        {
+          id: 'reg-paths',
+          t: 'Переходы и «непробованное» не поехали',
+          how: [
+            'Открой узел и посмотри стрелки переходов и строку про непробованные элементы.',
+            'Сравни с отделённым узлом.'
+          ],
+          exp: 'У отделённого узла свои переходы и своё число непробованного, а не унаследованные от исходного целиком.'
+        }
+      ]
+    }
+  ]
+}
+
+/* ── состояние ───────────────────────────────────────────────────────────── */
+const LS_DRAFT = 'uiap.audit.draft.v1'
+const LS_HIST  = 'uiap.audit.history.v1'
+const ITEMS = CHECKLIST.groups.flatMap(g => g.items.map(i => ({...i, group: g.id, gtitle: g.title})))
+
+let state = load()
+
+function blank(){
+  const d = new Date()
+  return {
+    schemaVersion: 1,
+    checklistVersion: CHECKLIST.version,
+    startedAt: d.toISOString(),
+    session: { date: d.toISOString().slice(0,10), branch: '', commit: '', build: '' },
+    results: {},
+    overall: '',
+    requests: ''
+  }
+}
+function load(){
+  try{ const raw = localStorage.getItem(LS_DRAFT); if(raw) return {...blank(), ...JSON.parse(raw)} }catch(e){}
+  return blank()
+}
+function save(){
+  try{ localStorage.setItem(LS_DRAFT, JSON.stringify(state)) }catch(e){}
+  const s = document.getElementById('saved')
+  s.textContent = 'черновик сохранён ' + new Date().toLocaleTimeString()
+  clearTimeout(save._t); save._t = setTimeout(()=>{ s.textContent = '' }, 2500)
+}
+function history(){
+  try{ return JSON.parse(localStorage.getItem(LS_HIST) || '[]') }catch(e){ return [] }
+}
+
+/* ── отрисовка ───────────────────────────────────────────────────────────── */
+let filter = 'all'
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))
+
+function render(){
+  const list = document.getElementById('list')
+  list.innerHTML = ''
+  let n = 0
+  for(const g of CHECKLIST.groups){
+    const shown = g.items.filter(i => visible(i))
+    const done = g.items.filter(i => state.results[i.id]?.status).length
+    const sec = document.createElement('section')
+    sec.className = 'group'
+    sec.innerHTML = `<h2>${esc(g.title)} <span class="gcount">${done}/${g.items.length}</span></h2>
+      <p class="why">${esc(g.why)}</p>`
+    for(const it of g.items){
+      n++
+      if(!shown.includes(it)) continue
+      sec.appendChild(card(it, n))
+    }
+    if(shown.length) list.appendChild(sec)
+  }
+  progress()
+}
+function visible(it){
+  const st = state.results[it.id]?.status
+  if(filter === 'open') return !st
+  if(filter === 'bad') return st === 'bad'
+  return true
+}
+function card(it, n){
+  const r = state.results[it.id] || {}
+  const el = document.createElement('div')
+  el.className = 'item' + (r.status ? ' ' + r.status : '')
+  el.innerHTML = `
+    <div class="itop">
+      <div class="num">${String(n).padStart(2,'0')}</div>
+      <div class="ttl">${it.t}</div>
+    </div>
+    <ol class="how">${it.how.map(h => `<li>${h}</li>`).join('')}</ol>
+    <div class="expect"><b>Должно получиться:</b> ${it.exp}</div>
+    <div class="status">
+      <button data-v="ok"   aria-pressed="${r.status==='ok'}">Работает</button>
+      <button data-v="bad"  aria-pressed="${r.status==='bad'}">Не так</button>
+      <button data-v="skip" aria-pressed="${r.status==='skip'}">Пропустил</button>
+    </div>
+    <div class="fields${r.status==='bad'||r.comment||r.log ? ' on' : ''}">
+      <div>
+        <label>Что именно не так — своими словами</label>
+        <textarea rows="2" data-f="comment" placeholder="Кнопка есть, но число экранов не изменилось…">${esc(r.comment||'')}</textarea>
+      </div>
+      <div>
+        <label>Строки из Log приложения (кнопка Copy)</label>
+        <textarea rows="3" data-f="log" placeholder="21:15:30.500 FAIL atlas:splitShots 3ms {observationIds} → …">${esc(r.log||'')}</textarea>
+        <div class="hint">Открой Log в правом нижнем углу, включи «only errors», нажми Copy — и вставь сюда.</div>
+      </div>
+    </div>`
+  el.querySelectorAll('.status button').forEach(b => b.onclick = () => {
+    const v = b.dataset.v
+    const cur = state.results[it.id] || {}
+    cur.status = cur.status === v ? null : v
+    state.results[it.id] = cur
+    save(); render()
+  })
+  el.querySelectorAll('textarea[data-f]').forEach(t => t.oninput = () => {
+    const cur = state.results[it.id] || {}
+    cur[t.dataset.f] = t.value
+    state.results[it.id] = cur
+    save(); progress()
+  })
+  return el
+}
+function stats(){
+  const v = ITEMS.map(i => state.results[i.id]?.status)
+  return {
+    total: ITEMS.length,
+    ok: v.filter(x => x==='ok').length,
+    bad: v.filter(x => x==='bad').length,
+    skip: v.filter(x => x==='skip').length,
+    open: v.filter(x => !x).length
+  }
+}
+function progress(){
+  const s = stats()
+  const pct = k => (s[k] / s.total * 100).toFixed(2) + '%'
+  document.getElementById('track').innerHTML =
+    `<i style="width:${pct('ok')};background:var(--ok)"></i>
+     <i style="width:${pct('bad')};background:var(--bad)"></i>
+     <i style="width:${pct('skip')};background:var(--skip)"></i>`
+  document.getElementById('pill').textContent =
+    `${s.ok} работает · ${s.bad} сломано · ${s.skip} пропущено · ${s.open} не отмечено (из ${s.total})`
+}
+
+/* ── отчёт ───────────────────────────────────────────────────────────────── */
+function collect(){
+  state.session = {
+    date:   document.getElementById('m-date').value.trim(),
+    branch: document.getElementById('m-branch').value.trim(),
+    commit: document.getElementById('m-commit').value.trim(),
+    build:  document.getElementById('m-build').value.trim()
+  }
+  state.overall  = document.getElementById('overall').value
+  state.requests = document.getElementById('requests').value
+  return { ...state, finishedAt: new Date().toISOString(), stats: stats() }
+}
+/* Markdown, а не только JSON: отчёт читает человек и читаю я, и обе стороны
+   должны видеть одно и то же без инструментов. */
+function toMarkdown(rep){
+  const L = []
+  const s = rep.stats
+  L.push(`# Отчёт живой проверки — ui-audit-pro`)
+  L.push('')
+  L.push(`- чек-лист: **${rep.checklistVersion}**`)
+  L.push(`- сессия: ${rep.session.date || '—'} · ветка ${rep.session.branch || '—'} · коммит ${rep.session.commit || '—'}`)
+  L.push(`- сборка: ${rep.session.build || '—'}`)
+  L.push(`- итог: **${s.ok} работает, ${s.bad} сломано**, ${s.skip} пропущено, ${s.open} не отмечено (из ${s.total})`)
+  const bad = ITEMS.filter(i => rep.results[i.id]?.status === 'bad')
+  if(bad.length){
+    L.push('')
+    L.push(`## Сломано (${bad.length})`)
+    for(const it of bad){
+      const r = rep.results[it.id]
+      L.push('')
+      L.push(`### ✗ ${strip(it.t)}`)
+      L.push(`- пункт: \`${it.id}\` · группа: ${it.gtitle}`)
+      L.push(`- ожидалось: ${strip(it.exp)}`)
+      L.push(`- мнение владельца: ${r.comment ? r.comment.trim() : '(не вписано)'}`)
+      if(r.log && r.log.trim()){
+        L.push('- журнал приложения:')
+        L.push('```')
+        L.push(r.log.trim())
+        L.push('```')
+      } else {
+        L.push('- журнал приложения: (не приложен)')
+      }
+    }
+  }
+  const skipped = ITEMS.filter(i => rep.results[i.id]?.status === 'skip')
+  if(skipped.length){
+    L.push('')
+    L.push(`## Пропущено (${skipped.length})`)
+    for(const it of skipped){
+      const r = rep.results[it.id]
+      L.push(`- \`${it.id}\` ${strip(it.t)}${r.comment ? ' — ' + r.comment.trim() : ''}`)
+    }
+  }
+  const open = ITEMS.filter(i => !rep.results[i.id]?.status)
+  if(open.length){
+    L.push('')
+    L.push(`## Не отмечено (${open.length})`)
+    L.push(open.map(i => `\`${i.id}\``).join(', '))
+  }
+  /* Заметки к работающим пунктам не выбрасываются: «работает, но медленно» —
+     это тоже дефект, просто не отказ. */
+  const notes = ITEMS.filter(i => {
+    const r = rep.results[i.id]
+    return r?.status === 'ok' && ((r.comment||'').trim() || (r.log||'').trim())
+  })
+  if(notes.length){
+    L.push('')
+    L.push(`## Работает, но есть замечание (${notes.length})`)
+    for(const it of notes){
+      const r = rep.results[it.id]
+      L.push(`- \`${it.id}\` ${strip(it.t)} — ${(r.comment||'').trim()}`)
+      if((r.log||'').trim()){ L.push('```'); L.push(r.log.trim()); L.push('```') }
+    }
+  }
+  L.push('')
+  L.push(`## Работает (${s.ok})`)
+  L.push(ITEMS.filter(i => rep.results[i.id]?.status === 'ok').map(i => `\`${i.id}\``).join(', ') || '—')
+  if((rep.overall||'').trim()){ L.push(''); L.push('## Общее впечатление'); L.push(rep.overall.trim()) }
+  if((rep.requests||'').trim()){ L.push(''); L.push('## Что изменить в чек-листе'); L.push(rep.requests.trim()) }
+  return L.join('\n')
+}
+const strip = s => String(s).replace(/<[^>]+>/g, '')
+
+function stamp(rep){
+  return (rep.session.date || rep.finishedAt.slice(0,10)) + '-' +
+         rep.finishedAt.slice(11,16).replace(':','')
+}
+
+async function send(){
+  const rep = collect()
+  const md = toMarkdown(rep)
+  const name = 'audit-' + stamp(rep)
+
+  // История — в первую очередь: отчёт не должен потеряться, даже если запись
+  // файла или буфер обмена откажут
+  const h = history()
+  h.unshift({ at: rep.finishedAt, stats: rep.stats, checklistVersion: rep.checklistVersion,
+              session: rep.session, report: rep })
+  try{ localStorage.setItem(LS_HIST, JSON.stringify(h.slice(0, 40))) }catch(e){}
+
+  let copied = false
+  try{ await navigator.clipboard.writeText(md); copied = true }catch(e){}
+
+  const d = document.getElementById('dlg')
+  document.getElementById('dlg-t').textContent =
+    `Отчёт готов · ${rep.stats.ok} работает, ${rep.stats.bad} сломано`
+  document.getElementById('dlg-b').innerHTML =
+    `<p style="margin:0 0 10px;color:var(--text2);font-size:13px">
+       ${copied ? 'Отчёт уже <b>в буфере обмена</b> — вставь его в чат одним <kbd>⌘V</kbd>.'
+                : 'Буфер обмена недоступен — нажми «Копировать» ниже.'}
+       Ещё вариант: сохранить файлом в папку проекта, тогда я прочитаю его сам.
+     </p>
+     <pre id="dlg-md">${esc(md)}</pre>`
+  const f = document.getElementById('dlg-f')
+  f.innerHTML = ''
+  f.appendChild(mk('Копировать отчёт', 'primary', async () => {
+    await navigator.clipboard.writeText(md); alert('Скопировано. Вставь в чат.')
+  }))
+  f.appendChild(mk('Сохранить в папку проекта', '', () => saveToFolder(name, md, rep)))
+  f.appendChild(mk('Скачать .md', 'ghost', () => download(name + '.md', md, 'text/markdown')))
+  f.appendChild(mk('Скачать .json', 'ghost', () =>
+    download(name + '.json', JSON.stringify(rep, null, 2), 'application/json')))
+  d.showModal()
+  render()
+}
+function mk(text, cls, fn){
+  const b = document.createElement('button')
+  b.textContent = text; if(cls) b.className = cls; b.onclick = fn; return b
+}
+function download(name, text, mime){
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([text], {type: mime}))
+  a.download = name; a.click(); URL.revokeObjectURL(a.href)
+}
+/**
+ * Запись прямо в папку проекта.
+ *
+ * Зачем: файл в папке я читаю сам, и пересылать ничего не надо. Папку выбираешь
+ * ОДИН раз, разрешение браузер помнит. Работает в Chrome; где нет — падаем на
+ * скачивание, и это честно сказано, а не молча.
+ */
+async function saveToFolder(name, md, rep){
+  if(!window.showDirectoryPicker){
+    alert('Этот браузер не умеет писать в папку. Скачай файл и положи его в reports/session-audits/ — я прочитаю оттуда.')
+    return
+  }
+  try{
+    const dir = await window.showDirectoryPicker({ id: 'uiap-audit', mode: 'readwrite' })
+    for(const [fn, text] of [[name + '.md', md], [name + '.json', JSON.stringify(rep, null, 2)]]){
+      const fh = await dir.getFileHandle(fn, { create: true })
+      const w = await fh.createWritable()
+      await w.write(text); await w.close()
+    }
+    alert('Сохранено: ' + name + '.md и .json\nВыбранная папка запомнена — в следующий раз тот же выбор.')
+  }catch(e){
+    if(e && e.name === 'AbortError') return
+    alert('Не записалось: ' + e.message + '\nСкачай файл вручную.')
+  }
+}
+
+/* ── история ─────────────────────────────────────────────────────────────── */
+function showHistory(){
+  const h = history()
+  const d = document.getElementById('dlg')
+  document.getElementById('dlg-t').textContent = `История проверок (${h.length})`
+  document.getElementById('dlg-b').innerHTML = h.length
+    ? `<div class="hist">${h.map((r,i) => `
+        <div class="hrow">
+          <span class="hd">${r.at.slice(0,16).replace('T',' ')} · ${esc(r.checklistVersion)}
+            ${r.session?.commit ? ' · ' + esc(r.session.commit) : ''}</span>
+          <span class="tag ok">${r.stats.ok}</span>
+          <span class="tag bad">${r.stats.bad}</span>
+          <span class="tag skip">${r.stats.skip}</span>
+          <button data-i="${i}" data-a="md">Отчёт</button>
+          <button data-i="${i}" data-a="load" class="ghost">Продолжить</button>
+        </div>`).join('')}</div>`
+    : '<p style="color:var(--faint)">Пока ни одной сохранённой проверки.</p>'
+  const f = document.getElementById('dlg-f')
+  f.innerHTML = ''
+  f.appendChild(mk('Скачать всю историю', 'ghost', () =>
+    download('audit-history.json', JSON.stringify(h, null, 2), 'application/json')))
+  document.getElementById('dlg-b').querySelectorAll('button[data-a]').forEach(b => b.onclick = () => {
+    const r = h[+b.dataset.i]
+    if(b.dataset.a === 'md'){
+      const md = toMarkdown(r.report)
+      document.getElementById('dlg-b').innerHTML = `<pre>${esc(md)}</pre>`
+      const f2 = document.getElementById('dlg-f'); f2.innerHTML = ''
+      f2.appendChild(mk('Копировать', 'primary', async () => {
+        await navigator.clipboard.writeText(md); alert('Скопировано.')
+      }))
+      f2.appendChild(mk('Назад', 'ghost', showHistory))
+    } else {
+      /* «Продолжить» подхватывает прошлый прогон целиком: доделать три пункта из
+         двадцати честнее, чем гонять весь список заново и отмечать по памяти. */
+      state = { ...r.report }
+      delete state.finishedAt; delete state.stats
+      save(); fill(); render(); document.getElementById('dlg').close()
+    }
+  })
+  d.showModal()
+}
+
+/* ── связка ──────────────────────────────────────────────────────────────── */
+function fill(){
+  document.getElementById('m-date').value   = state.session?.date || ''
+  document.getElementById('m-branch').value = state.session?.branch || ''
+  document.getElementById('m-commit').value = state.session?.commit || ''
+  document.getElementById('m-build').value  = state.session?.build || ''
+  document.getElementById('overall').value  = state.overall || ''
+  document.getElementById('requests').value = state.requests || ''
+}
+['m-date','m-branch','m-commit','m-build','overall','requests'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => {
+    state.session = state.session || {}
+    if(id === 'overall') state.overall = document.getElementById(id).value
+    else if(id === 'requests') state.requests = document.getElementById(id).value
+    else state.session[id.slice(2)] = document.getElementById(id).value
+    save()
+  })
+})
+document.getElementById('b-send').onclick = send
+document.getElementById('b-hist').onclick = showHistory
+document.getElementById('b-only-open').onclick = e => {
+  filter = filter === 'open' ? 'all' : 'open'
+  e.target.textContent = filter === 'open' ? '← Показать все пункты' : 'Показать только неотмеченные'
+  render()
+}
+document.getElementById('b-only-bad').onclick = e => {
+  filter = filter === 'bad' ? 'all' : 'bad'
+  e.target.textContent = filter === 'bad' ? '← Показать все пункты' : 'Только сломанные'
+  render()
+}
+document.getElementById('b-reset').onclick = () => {
+  if(!confirm('Очистить текущий прогон? История сохранённых отчётов останется.')) return
+  state = blank(); save(); fill(); render()
+}
+if(!state.session?.date) state.session = { ...(state.session||{}), date: new Date().toISOString().slice(0,10) }
+fill(); render()
+</script>
+</body>
+</html>
